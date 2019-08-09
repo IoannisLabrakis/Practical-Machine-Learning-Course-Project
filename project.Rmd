@@ -1,0 +1,152 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "Ioannis Labrakis"
+date: 
+output: html_document
+---
+
+
+
+#Overview
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, the goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. 
+
+The data for this project come from this source: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The goal of this project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. 
+
+The dataset used for this project were provided from Ugulino, W.; Cardador, D.; Vega, K.; Velloso, E.; Milidiu, R.; Fuks, H.Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements
+
+
+#Importing and processing the data
+
+```{r packages}
+#load required packages
+library(caret)
+library(rpart)
+library(rattle)
+library(randomForest)
+library(gbm)
+```
+
+```{r importing}
+#loading the data
+training = read.csv("C:/Users/Giannis/Desktop/Data science Specialization/8.Practical machine learning/course project/pml-training.csv",header = TRUE)
+testing = read.csv("C:/Users/Giannis/Desktop/Data science Specialization/8.Practical machine learning/course project/pml-testing.csv",header = TRUE)
+dim(training)
+dim(testing)
+
+```
+
+Observing the two datasets it was found that there were some columns including only missing values. Additionally, the first seven variables iclude information about the people participated in the test, so they are irrelevant  with the model.
+
+```{r cleaning}
+#remove columns with NA values
+training_clean <- training[, colSums(is.na(training)) == 0]
+testing_clean <- testing[, colSums(is.na(testing)) == 0]
+
+#remove the first seven variables
+training_clean <- training_clean[,-c(1:7)]
+testing_clean <- testing_clean[,-c(1:7)]
+dim(training_clean)
+dim(testing_clean)
+```
+
+After cleaning the data, a partition of the training set was made by splitting the training data into 70% as train data and 30% as test data.
+
+```{r train}
+set.seed(358)
+inTrain <- createDataPartition(training_clean$classe, p = 0.70, list= FALSE)
+trainData <- training_clean[inTrain,]
+testingData <- training_clean[-inTrain,]
+summary(trainData)
+```
+
+It was found that there were a lot variables near zero and they were removed. 
+
+```{r nzv}
+#remove near zero variables
+nzv <- nearZeroVar(trainData)
+trainData <- trainData[, -nzv]
+testingData  <- testingData [, -nzv]
+dim(trainData)
+dim(testingData)
+```
+
+#Building the models
+For this project there were used three different models and validated which of them provides the best accuracy. Those models were classification tree, gradient boosting and random forests. For improving the efficiency and limit overfitting, cross validation technique was used with 3 folds. The number of folds could be bigger for better accuracy, but the time needed to process it was taking too long.
+
+##Classification tree
+```{r class tree}
+#setting cross validation folds to 10
+trControl <- trainControl(method="cv", number=3)
+modelClassTree <- train(classe~., data=trainData, method="rpart", trControl=trControl)
+
+#plotting the classification tree model
+fancyRpartPlot(modelClassTree$finalModel)
+
+#prediction with classification tree
+pred1 <- predict(modelClassTree,newdata=testingData)
+confMatrixClassTree <- confusionMatrix(testingData $classe,pred1)
+confMatrixClassTree$table
+
+#accuracy
+confMatrixClassTree$overall[1]
+```
+
+With a low accuracy of about 55% using this model, the class will not be predicted by the other predictors well. The out of sample error is 45%. 
+
+##gradient boosting 
+```{r boosting}
+modelgbm <- train(classe~., data = trainData, method="gbm",trControl = trControl, verbose = FALSE) 
+
+#plotting the gbm model
+plot(modelgbm)
+
+#prediction with gbm model
+pred2 <- predict(modelgbm,newdata=testingData)
+
+confMatrixgbm <- confusionMatrix(testingData$classe,pred2)
+confMatrixgbm$table
+
+#accuracy
+confMatrixgbm$overall[1]
+```
+
+The accuracy of gbm method was high enough at about 96% and therefore the out of sample error is about 4%.
+
+##Random forests
+```{r random forest}
+modelrf <- train(classe~., data=trainData, method="rf", trControl=trControl)
+
+#plotting random forest
+plot(modelrf)
+
+#prediction with rf model
+pred3 <- predict(modelrf,newdata=testingData)
+
+confMatrixrf <- confusionMatrix(testingData$classe,pred3)
+confMatrixrf$table
+
+#accuracy
+confMatrixrf$overall[1]
+```
+
+The random forest accuracy 99.2% and the out of sample error is about 0.8%
+
+#Conclusion
+
+As it was shown above the random forest model is the best out the three models. So it used to predict the values of classe for the test data set.
+
+```{r final}
+testPred <- predict(modelrf,newdata = testing_clean)
+testPred
+```
